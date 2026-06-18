@@ -80,6 +80,12 @@ services:
         - "redis:redis_cache"
         - "db:mysql"
 
+    # Allow Django in Docker to reach Ollama running on the host machine.
+    # On Windows/Mac this resolves automatically; on Linux this mapping
+    # is required.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   celery:
     image: "docker.pkg.github.com/frg-fossee/esim-cloud/celery:dev"
     build: ./esim-cloud-backend/
@@ -117,7 +123,7 @@ services:
   #     - ./mysql_data:/var/lib/mysql
 
   db:
-    image: postgres:15
+    image: postgres:14
     volumes:
       - ./postgres_data:/var/lib/postgresql/data/
     env_file:

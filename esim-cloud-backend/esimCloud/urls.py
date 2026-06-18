@@ -58,9 +58,6 @@ urlpatterns = [
     # LTI Routes
     path('api/lti/', include(ltiURLS)),
 
-    # Chatbot Routes
-    path('api/chat/', include(chatbotURLs)),
-
     # Auth API Routes
     url(r'^api/auth/', include('djoser.urls')),
     url(r'^api/auth/', include('djoser.urls.authtoken')),
