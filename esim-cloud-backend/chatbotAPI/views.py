@@ -14,15 +14,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework import status
 
 from chatbotAPI.serializers import ChatRequestSerializer
-from chatbotAPI.services.llm_client import complete_chat
+from chatbotAPI.services.llm_client import complete_chat, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
 # Default system prompt — passed to complete_chat, not hardcoded in llm_client
-_SYSTEM_PROMPT = (
-    "You are eSim Cloud assistant for Indian students. Help with eSim "
-    "usage and basic circuit questions. If unsure, say so."
-)
+_SYSTEM_PROMPT = "You are eSim Cloud assistant for Indian students. Help with eSim usage and basic circuit questions. If unsure, say so. Context JSON describes their canvas."
 
 
 class HealthCheckView(APIView):
@@ -65,41 +62,16 @@ class ChatMessageView(APIView):
                 user_message=message,
                 context_json=context,
             )
-        except ValueError as exc:
-            error_msg = str(exc)
-
-            if error_msg == "OLLAMA_UNAVAILABLE":
-                return Response(
-                    {"error": "AI assistant is currently unavailable. "
-                              "Make sure Ollama is running locally."},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-
-            if error_msg == "OLLAMA_TIMEOUT":
-                return Response(
-                    {"error": "AI assistant took too long to respond. "
-                              "Please try again."},
-                    status=status.HTTP_504_GATEWAY_TIMEOUT,
-                )
-
-            if error_msg == "OLLAMA_MODEL_ERROR":
-                return Response(
-                    {"error": "The configured AI model is not available. "
-                              "Run: ollama pull " + settings.OLLAMA_MODEL},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-
-            # Any other ValueError from llm_client
-            logger.error("[chatbotAPI] LLM error: %s", error_msg)
+        except LLMUnavailableError as e:
+            logger.error("[chatbotAPI] Caught LLMUnavailableError: %s", e)
             return Response(
-                {"error": "AI assistant encountered an error."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {"error": "LLM unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-
-        except Exception:
-            logger.exception("[chatbotAPI] Unexpected error in ChatMessageView")
+        except Exception as e:
+            logger.error("[chatbotAPI] Unexpected error in chat endpoint: %s - %s", type(e).__name__, str(e))
             return Response(
-                {"error": "AI assistant encountered an error."},
+                {"error": "An unexpected error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

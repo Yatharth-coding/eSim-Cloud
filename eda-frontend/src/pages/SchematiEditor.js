@@ -22,6 +22,7 @@ import TemplateWizard from '../components/SchematicEditor/TemplateWizard'
 import '../components/SchematicEditor/Helper/SchematicEditor.css'
 import { fetchSchematic, fetchGallerySchematic } from '../redux/actions/index'
 import { useDispatch, useSelector } from 'react-redux'
+import ChatPanel from '../components/AIAssistant/ChatPanel'
 
 const useStyles = makeStyles(() => ({
   root: {
@@ -189,6 +190,7 @@ export default function SchematiEditor (props) {
           clearCanvasFirst={clearCanvasFirst}
         />
       )}
+      <ChatPanel />
     </div>
   )
 }

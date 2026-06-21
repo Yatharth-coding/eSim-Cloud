@@ -151,10 +151,13 @@ GOOGLE_OAUTH_REDIRECT_URI = os.environ.get(
 POST_ACTIVATE_REDIRECT_URL = os.environ.get(
     "POST_ACTIVATE_REDIRECT_URL", "http://localhost/")
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
 # Ollama LLM settings (local model, no API key required)
 OLLAMA_BASE_URL = os.environ.get(
     'OLLAMA_BASE_URL', 'http://host.docker.internal:11434')
-OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.2')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3')
 
 DJOSER = {
     'SEND_ACTIVATION_EMAIL': False,
