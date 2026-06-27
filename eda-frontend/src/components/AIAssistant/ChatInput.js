@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TextField, IconButton, makeStyles } from '@material-ui/core';
 import SendIcon from '@material-ui/icons/Send';
 
@@ -29,9 +29,16 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-export default function ChatInput({ onSend, disabled, inputRef }) {
+export default function ChatInput({ onSend, disabled, inputRef, prefillMessage, onPrefillClear }) {
   const classes = useStyles();
   const [text, setText] = useState('');
+
+  useEffect(() => {
+    if (prefillMessage) {
+      setText(prefillMessage);
+      if (onPrefillClear) onPrefillClear();
+    }
+  }, [prefillMessage, onPrefillClear]);
 
   const handleSend = () => {
     const trimmed = text.trim();

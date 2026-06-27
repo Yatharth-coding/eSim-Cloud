@@ -24,14 +24,13 @@ import HistoryIcon from '@material-ui/icons/History'
 import MuiAlert from '@material-ui/lab/Alert'
 import { makeStyles } from '@material-ui/core/styles'
 import { useSelector, useDispatch } from 'react-redux'
-import { setControlLine, setControlBlock, setResultTitle, setResultGraph, setResultText, setNetlist, toggleSimulate } from '../../redux/actions/index'
+import { setControlLine, setControlBlock, setResultTitle, setResultGraph, setResultText, setNetlist, toggleSimulate, setLastSimulationError } from '../../redux/actions/index'
 import { GenerateNetList, GenerateNodeList, GenerateCompList, ErcCheckNets, Save, renderGalleryXML } from './Helper/ToolbarTools'
 import SimulationScreen from '../Shared/SimulationScreen'
 import { Multiselect } from 'multiselect-react-dropdown'
 import Notice from '../Shared/Notice'
 import ErrorExplainerCard from '../Simulator/ErrorExplainerCard'
 import SimulationHistoryDrawer from '../Simulator/SimulationHistoryDrawer'
-import ChatPanel from '../AIAssistant/ChatPanel'
 import api from '../../utils/Api'
 import { saveSimulationRun } from '../../utils/simulationHistory'
 
@@ -102,19 +101,18 @@ export default function SimulationProperties (props) {
   const [needParameters, setNeedParameters] = useState(false)
   const [status, setStatus] = useState('')
   const stats = { loading: 'loading', error: 'error', success: 'success' }
-  // errorHelp holds the structured error_help object from the backend parser,
-  // or null when no structured help is available (backward-compatibility).
-  const [errorHelp, setErrorHelp] = useState(null)
+  // errorDetails holds the full result object for failed simulations
+  const [errorDetails, setErrorDetails] = useState(null)
 
   // Auto-run state to prevent infinite loops when entering the simulator via the "Send to Simulator" button
   const [autoRunFired, setAutoRunFired] = useState(false)
 
   // ── History drawer state ─────────────────────────────────────────────────
   const [historyOpen, setHistoryOpen] = useState(false)
-  // historyErrorHelp holds the error_help from a SELECTED HISTORICAL result.
-  // This is separate from errorHelp (live simulation) so that Task 4 can
+  // historyErrorDetails holds the result object from a SELECTED HISTORICAL result.
+  // This is separate from errorDetails (live simulation) so that Task 4 can
   // reuse ErrorExplainerCard without duplicating its logic.
-  const [historyErrorHelp, setHistoryErrorHelp] = useState(null)
+  const [historyErrorDetails, setHistoryErrorDetails] = useState(null)
   // historySuccessMsg is shown in the result area when a green (success)
   // history entry is clicked but waveform data is not stored in history.
   const [historySuccessMsg, setHistorySuccessMsg] = useState(null)
@@ -520,13 +518,10 @@ export default function SimulationProperties (props) {
           console.log(res.data.details)
           msg = res.data.details.fail.replace("b'", '')
           isError = true
-          // Populate structured error help when the backend parser has provided it.
-          // Path: res.data.details.error_help (set by ngspice_helper.py via error_parser.py)
-          if (res.data?.details?.error_help) {
-            setErrorHelp(res.data.details.error_help)
-          } else {
-            setErrorHelp(null)
-          }
+          // Provide the full details object to errorDetails state
+          const errorHelp = res.data?.details?.error_help
+          dispatch(setLastSimulationError(errorHelp?.summary || "Simulation failed"))
+          setErrorDetails(res.data.details)
           // Bug 3 Part A: capture canvas XML at the moment of simulation failure.
           let canvasXmlOnFail = null
           try { canvasXmlOnFail = Save() } catch (e) { console.warn('[History] Could not capture canvas XML:', e) }
@@ -615,7 +610,7 @@ export default function SimulationProperties (props) {
           handleStatus(stats.success)
           handlesimulateOpen()
           // Clear any previous error help on success.
-          setErrorHelp(null)
+          setErrorDetails(null)
           // Bug 3 Part A: capture canvas XML at the moment of successful simulation.
           let canvasXmlOnSuccess = null
           try { canvasXmlOnSuccess = Save() } catch (e) { console.warn('[History] Could not capture canvas XML:', e) }
@@ -631,7 +626,7 @@ export default function SimulationProperties (props) {
           })
         } else if (resPending === false) {
           handleStatus(stats.error)
-          handleErrMsg(msg)
+          handleErrMsg("Simulation failed. See technical details above.")
         }
         handleErrOpen()
       })
@@ -829,20 +824,17 @@ export default function SimulationProperties (props) {
    */
   const handleSelectHistoryResult = (item) => {
     // Clear any live-simulation error / success state first.
-    setErrorHelp(null)
+    setErrorDetails(null)
     setHistorySuccessMsg(null)
 
     // ── Bug 2 fix: set appropriate result state ─────────────────────────────
-    if (item && item.errorHelp) {
-      // Failed run with structured error help → show ErrorExplainerCard
-      setHistoryErrorHelp(item.errorHelp)
-    } else if (item && !item.success) {
-      // Failed run without structured errorHelp — clear history card
-      setHistoryErrorHelp(null)
+    if (item && !item.success) {
+      // Failed run
+      setHistoryErrorDetails(item.result)
     } else {
       // Successful run — waveform data is not stored in history.
       // Show a clear message in the result area instead of a blank screen.
-      setHistoryErrorHelp(null)
+      setHistoryErrorDetails(null)
       setHistorySuccessMsg(
         'This simulation ran successfully. The full waveform output is not available in history — run the simulation again to see the graph.'
       )
@@ -894,20 +886,21 @@ export default function SimulationProperties (props) {
         </Snackbar>
         <Notice status={status} open={err} msg={errMsg} close={handleErrClose} />
         {/* ErrorExplainerCard for LIVE simulation errors (morning session, Task 4 source A). */}
-        {errorHelp && (
+        {errorDetails && (
           <ErrorExplainerCard
-            summary={errorHelp.summary}
-            hints={errorHelp.hints}
-            codes={errorHelp.codes}
+            errorDetails={errorDetails}
             onAskAI={() => {
+              const errorHelp = errorDetails.error_help
+              const summary = errorHelp ? errorHelp.summary : "Simulation failed"
+              const hints = errorHelp && errorHelp.hints ? errorHelp.hints : []
               const message =
                 'I got this simulation error: ' +
-                errorHelp.summary +
-                (errorHelp.hints && errorHelp.hints.length > 0
-                  ? '. Hints: ' + errorHelp.hints.join(', ')
+                summary +
+                (hints && hints.length > 0
+                  ? '. Hints: ' + hints.join(', ')
                   : '')
               window.dispatchEvent(
-                new CustomEvent('esim-open-chat-with-prompt', { detail: { message } })
+                new CustomEvent('esim-open-chat-with-prompt', { detail: { message, includeContext: true } })
               )
             }}
           />
@@ -915,20 +908,21 @@ export default function SimulationProperties (props) {
         {/* ErrorExplainerCard for HISTORICAL simulation errors (Task 4 source B).
             Reuses the same component — no duplication. Only shown when the user
             has clicked a failed run inside SimulationHistoryDrawer. */}
-        {historyErrorHelp && (
+        {historyErrorDetails && (
           <ErrorExplainerCard
-            summary={historyErrorHelp.summary}
-            hints={historyErrorHelp.hints}
-            codes={historyErrorHelp.codes}
+            errorDetails={historyErrorDetails}
             onAskAI={() => {
+              const errorHelp = historyErrorDetails.error_help
+              const summary = errorHelp ? errorHelp.summary : "Simulation failed"
+              const hints = errorHelp && errorHelp.hints ? errorHelp.hints : []
               const message =
                 'I got this simulation error: ' +
-                historyErrorHelp.summary +
-                (historyErrorHelp.hints && historyErrorHelp.hints.length > 0
-                  ? '. Hints: ' + historyErrorHelp.hints.join(', ')
+                summary +
+                (hints && hints.length > 0
+                  ? '. Hints: ' + hints.join(', ')
                   : '')
               window.dispatchEvent(
-                new CustomEvent('esim-open-chat-with-prompt', { detail: { message } })
+                new CustomEvent('esim-open-chat-with-prompt', { detail: { message, includeContext: true } })
               )
             }}
           />
@@ -1813,12 +1807,6 @@ export default function SimulationProperties (props) {
           onSelectResult={handleSelectHistoryResult}
         />
 
-        {/* AI Chat Panel — embedded inline so it receives the esim-open-chat-with-prompt
-            event fired by the ErrorExplainerCard's "Ask AI About This Error" button.
-            Placed below all simulation controls for natural reading flow. */}
-        <div style={{ padding: '8px 4px 4px' }}>
-          <ChatPanel />
-        </div>
       </div>
     </>
   )

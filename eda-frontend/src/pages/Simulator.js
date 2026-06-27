@@ -6,7 +6,7 @@ import Editor from '../components/Simulator/Editor'
 import textToFile from '../components/Simulator/textToFile'
 import SimulationScreen from '../components/Shared/SimulationScreen'
 import { useDispatch, useSelector } from 'react-redux'
-import { setResultGraph, setResultText, setNetlist } from '../redux/actions/index'
+import { setResultGraph, setResultText, setNetlist, setLastSimulationError } from '../redux/actions/index'
 import Notice from '../components/Shared/Notice'
 import { sanitizeNetlistForExport } from '../components/SchematicEditor/Helper/NetlistExporter'
 import ErrorExplainerCard from '../components/Simulator/ErrorExplainerCard'
@@ -38,22 +38,21 @@ export default function Simulator () {
   const [err, setErr] = useState(false)
   const [status, setStatus] = useState('')
   const stats = { loading: 'loading', error: 'error', success: 'success' }
-  // errorHelp holds the structured error_help object from the backend parser,
-  // or null when no structured help is available (backward-compatibility).
-  const [errorHelp, setErrorHelp] = useState(null)
+  // errorDetails holds the full result object for failed simulations
+  const [errorDetails, setErrorDetails] = useState(null)
 
   const [missingSimCmd, setMissingSimCmd] = useState(false)
 
   // History drawer state
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [historyErrorHelp, setHistoryErrorHelp] = useState(null)
+  const [historyErrorDetails, setHistoryErrorDetails] = useState(null)
 
   const handleSelectHistoryResult = (item) => {
-    setErrorHelp(null)
-    if (item && item.errorHelp) {
-      setHistoryErrorHelp(item.errorHelp)
+    setErrorDetails(null)
+    if (item && !item.success) {
+      setHistoryErrorDetails(item.result)
     } else {
-      setHistoryErrorHelp(null)
+      setHistoryErrorDetails(null)
     }
   }
   const [state, setState] = React.useState({
@@ -178,11 +177,10 @@ export default function Simulator () {
           //   res.data = { state: '...', details: celery_result.info }
           //   celery_result.info on failure = { fail: '...', error_help: {...} }
           // → correct path is res.data?.details?.error_help
-          if (res.data?.details?.error_help) {
-            setErrorHelp(res.data.details.error_help)
-          } else {
-            setErrorHelp(null)
-          }
+          // Provide the full details object to errorDetails state
+          const errorHelp = res.data?.details?.error_help
+          dispatch(setLastSimulationError(errorHelp?.summary || "Simulation failed"))
+          setErrorDetails(res.data.details)
           // Task 5: save failed run to localStorage history.
           saveSimulationRun({
             timestamp: new Date().toISOString(),
@@ -264,7 +262,7 @@ export default function Simulator () {
           handleStatus(stats.success)
           handlesimulateOpen()
           // Clear any previous error help on success.
-          setErrorHelp(null)
+          setErrorDetails(null)
           // Task 5: save successful run to localStorage history.
           saveSimulationRun({
             timestamp: new Date().toISOString(),
@@ -276,7 +274,7 @@ export default function Simulator () {
           })
         } else if (resPending === false) {
           handleStatus(stats.error)
-          handleErrMsg(msg)
+          handleErrMsg("Simulation failed. See technical details above.")
 
           // console.log('reached error alert')
           // console.log(msg)
@@ -294,18 +292,24 @@ export default function Simulator () {
    * pre-fill its input with a description of the current error.
    */
   const handleAskAI = () => {
-    const message = 'I got this simulation error: ' + errorHelp.summary +
-      (errorHelp.hints && errorHelp.hints.length > 0 ? '. Hints: ' + errorHelp.hints.join(', ') : '')
+    const errorHelp = errorDetails && errorDetails.error_help
+    const summary = errorHelp ? errorHelp.summary : "Simulation failed"
+    const hints = errorHelp && errorHelp.hints ? errorHelp.hints : []
+    const message = 'I got this simulation error: ' + summary +
+      (hints && hints.length > 0 ? '. Hints: ' + hints.join(', ') : '')
     window.dispatchEvent(new CustomEvent('esim-open-chat-with-prompt', {
-      detail: { message }
+      detail: { message, includeContext: true }
     }))
   }
 
   const handleHistoryAskAI = () => {
-    const message = 'I got this simulation error: ' + historyErrorHelp.summary +
-      (historyErrorHelp.hints && historyErrorHelp.hints.length > 0 ? '. Hints: ' + historyErrorHelp.hints.join(', ') : '')
+    const errorHelp = historyErrorDetails && historyErrorDetails.error_help
+    const summary = errorHelp ? errorHelp.summary : "Simulation failed"
+    const hints = errorHelp && errorHelp.hints ? errorHelp.hints : []
+    const message = 'I got this simulation error: ' + summary +
+      (hints && hints.length > 0 ? '. Hints: ' + hints.join(', ') : '')
     window.dispatchEvent(new CustomEvent('esim-open-chat-with-prompt', {
-      detail: { message }
+      detail: { message, includeContext: true }
     }))
   }
 
@@ -321,22 +325,18 @@ export default function Simulator () {
       >
         {/* ErrorExplainerCard appears above the raw error Notice when
             the backend has provided structured error_help. */}
-        {errorHelp && (
+        {errorDetails && (
           <Grid item xs={12}>
             <ErrorExplainerCard
-              summary={errorHelp.summary}
-              hints={errorHelp.hints}
-              codes={errorHelp.codes}
+              errorDetails={errorDetails}
               onAskAI={handleAskAI}
             />
           </Grid>
         )}
-        {historyErrorHelp && (
+        {historyErrorDetails && (
           <Grid item xs={12}>
             <ErrorExplainerCard
-              summary={historyErrorHelp.summary}
-              hints={historyErrorHelp.hints}
-              codes={historyErrorHelp.codes}
+              errorDetails={historyErrorDetails}
               onAskAI={handleHistoryAskAI}
             />
           </Grid>

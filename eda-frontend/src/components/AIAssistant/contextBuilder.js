@@ -1,5 +1,6 @@
-export function buildEditorContext(graph) {
-  const defaultContext = { page: 'editor', components: [], wireCount: 0, analysisHints: {} };
+export function buildEditorContext(graph, lastSimulationError = null, netlistSnippet = null) {
+  const safeNetlistSnippet = netlistSnippet ? netlistSnippet.slice(0, 4000) : null;
+  const defaultContext = { page: 'editor', components: [], wireCount: 0, analysisHints: {}, lastSimulationError, netlistSnippet: safeNetlistSnippet };
   
   if (!graph) return defaultContext;
 
@@ -46,6 +47,8 @@ export function buildEditorContext(graph) {
     page: 'editor',
     components,
     wireCount,
-    analysisHints: {}
+    analysisHints: {},
+    lastSimulationError,
+    netlistSnippet: safeNetlistSnippet
   };
 }

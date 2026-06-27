@@ -20,6 +20,8 @@ import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Checkbox from '@material-ui/core/Checkbox';
 import { getEditorGraph } from '../SchematicEditor/Helper/ComponentDrag';
 import { buildEditorContext } from './contextBuilder';
+import { useSelector } from 'react-redux';
+import { buildNetlistFromGraph } from '../SchematicEditor/Helper/NetlistExporter';
 
 const drawerWidth = 360;
 
@@ -62,8 +64,10 @@ const useStyles = makeStyles((theme) => ({
 
 export default function ChatPanel() {
   const classes = useStyles();
+  const lastSimulationError = useSelector(state => state.simulationReducer?.lastSimulationError || null);
   const [open, setOpen] = useState(false);
   const [includeCircuit, setIncludeCircuit] = useState(true);
+  const [prefillMessage, setPrefillMessage] = useState('');
   const endOfMessagesRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -72,7 +76,25 @@ export default function ChatPanel() {
   const handleSend = (text) => {
     if (includeCircuit) {
       const graph = getEditorGraph();
-      const editorCtx = buildEditorContext(graph);
+      let netlistSnippet = null;
+      if (graph) {
+        try {
+          const netlistData = buildNetlistFromGraph(graph);
+          if (netlistData && netlistData.main) {
+            netlistSnippet = (netlistData.models ? netlistData.models + '\n' : '') + netlistData.main;
+          }
+        } catch (e) {
+          console.log("Could not build netlist snippet for context", e);
+        }
+      }
+      const editorCtx = buildEditorContext(graph, lastSimulationError, netlistSnippet);
+      
+      // Enforce 8KB limit (7500 chars roughly to be safe)
+      if (JSON.stringify(editorCtx).length > 7500) {
+        editorCtx.components = [];
+        editorCtx.analysisHints = {};
+      }
+      
       sendMessage(text, { page: 'editor', ...editorCtx });
     } else {
       sendMessage(text);
@@ -86,6 +108,20 @@ export default function ChatPanel() {
       endOfMessagesRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, loading, error, open]);
+
+  useEffect(() => {
+    const handleOpenChatWithPrompt = (e) => {
+      setOpen(true);
+      if (e.detail && e.detail.message) {
+        setPrefillMessage(e.detail.message);
+      }
+      if (e.detail && e.detail.includeContext) {
+        setIncludeCircuit(true);
+      }
+    };
+    window.addEventListener('esim-open-chat-with-prompt', handleOpenChatWithPrompt);
+    return () => window.removeEventListener('esim-open-chat-with-prompt', handleOpenChatWithPrompt);
+  }, []);
 
   // The Escape key handler has been moved to the Drawer's onKeyDown prop.
 
@@ -175,7 +211,13 @@ export default function ChatPanel() {
           />
         </div>
 
-        <ChatInput onSend={handleSend} disabled={loading} inputRef={inputRef} />
+        <ChatInput 
+          onSend={handleSend} 
+          disabled={loading} 
+          inputRef={inputRef} 
+          prefillMessage={prefillMessage} 
+          onPrefillClear={() => setPrefillMessage('')} 
+        />
       </Drawer>
     </>
   );
