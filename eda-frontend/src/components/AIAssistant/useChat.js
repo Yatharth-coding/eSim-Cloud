@@ -48,7 +48,9 @@ export default function useChat() {
         if (response.data.conversation_id) {
           conversationIdRef.current = response.data.conversation_id;
         }
-        const aiMsg = { id: Date.now() + 1, sender: 'assistant', text: response.data.reply, timestamp: new Date() };
+        const reply = response.data.reply || response.data.message || '';
+        const sources = response.data.sources || [];
+        const aiMsg = { id: Date.now() + 1, sender: 'assistant', text: reply, timestamp: new Date(), sources: sources };
         setMessages((prev) => [...prev, aiMsg]);
         setLoading(false);
       }

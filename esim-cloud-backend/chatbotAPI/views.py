@@ -16,6 +16,13 @@ from rest_framework import status
 from chatbotAPI.serializers import ChatRequestSerializer
 from chatbotAPI.services.llm_client import complete_chat, LLMUnavailableError
 
+try:
+    from chatbotAPI.services.rag import retrieve
+    RAG_ENABLED = True
+except ImportError:
+    RAG_ENABLED = False
+    def retrieve(query, k=5): return []
+
 logger = logging.getLogger(__name__)
 
 # Default system prompt — passed to complete_chat, not hardcoded in llm_client
@@ -56,29 +63,38 @@ class ChatMessageView(APIView):
         conversation_id = data.get("conversation_id") or uuid.uuid4()
         context = data.get("context")
 
+        rag_sources = []
+        if RAG_ENABLED:
+            rag_sources = retrieve(message, k=4)
+
+        system_prompt = _SYSTEM_PROMPT
+        if rag_sources:
+            doc_context = "\n\n".join([f"Source: {s['title']}\n{s['text']}" for s in rag_sources])
+            system_prompt = system_prompt + "\n\nDocumentation context (use this when relevant, cite source titles):\n" + doc_context
+
         try:
             reply = complete_chat(
-                system_prompt=_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 user_message=message,
                 context_json=context,
             )
         except LLMUnavailableError as e:
             logger.error("[chatbotAPI] Caught LLMUnavailableError: %s", e)
             return Response(
-                {"error": "LLM unavailable"},
+                {"error": "LLM unavailable", "sources": []},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
             logger.error("[chatbotAPI] Unexpected error in chat endpoint: %s - %s", type(e).__name__, str(e))
             return Response(
-                {"error": "An unexpected error occurred"},
+                {"error": "An unexpected error occurred", "sources": []},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         return Response(
             {
                 "reply": reply,
-                "sources": [],
+                "sources": [{"title": s["title"], "url": s["url"]} for s in rag_sources],
                 "conversation_id": str(conversation_id),
             },
             status=status.HTTP_200_OK,

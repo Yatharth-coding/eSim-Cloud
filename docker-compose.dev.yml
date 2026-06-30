@@ -30,6 +30,7 @@ services:
     environment:
       - NODE_ENV=development
       - "PUBLIC_URL=${EDA_PUBLIC_URL}"
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
     stdin_open: true
     depends_on:
       - django
@@ -65,6 +66,7 @@ services:
       - "8000:8000"
     volumes:
       - ./esim-cloud-backend:/code
+      - ./esim-cloud-backend/chroma_data:/code/chroma_data
       - run_vol:/var/run
       - cache_vol:/var/cache
       - tmp_vol:/tmp
@@ -75,6 +77,9 @@ services:
 
     env_file:
       - .env
+
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
 
     links:
         - "redis:redis_cache"
@@ -128,6 +133,13 @@ services:
       - ./postgres_data:/var/lib/postgresql/data/
     env_file:
       - .env
+
+  chromadb:
+    image: chromadb/chroma:0.4.15
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./esim-cloud-backend/chroma_data:/chroma/chroma
 
 volumes:
   run_vol:

@@ -172,7 +172,12 @@ export default function ChatPanel() {
             </Typography>
           )}
           {messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} />
+            <ChatMessage 
+              key={msg.id} 
+              message={msg.text || ''} 
+              isUser={msg.sender === 'user'} 
+              sources={msg.sources || []} 
+            />
           ))}
           {loading && (
             <div style={{ display: 'flex', alignItems: 'center', marginTop: 10, paddingLeft: 10 }}>

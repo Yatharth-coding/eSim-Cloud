@@ -333,6 +333,7 @@ const UI_CATEGORIES = [
 ]
 
 const searchOptions = {
+  ALL: 'search',
   NAME: 'name__icontains',
   KEYWORD: 'keyword__icontains',
   DESCRIPTION: 'description__icontains',
