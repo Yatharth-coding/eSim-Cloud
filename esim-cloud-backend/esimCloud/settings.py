@@ -88,6 +88,17 @@ TEMPLATES = [
 WSGI_APPLICATION = 'esimCloud.wsgi.application'
 
 AUTH_USER_MODEL = 'authAPI.User'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.environ.get('THROTTLE_REDIS_URL', 'redis://redis:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
 # Database config Defaults to sqlite3 if not provided in environment files
 
 DATABASES = {
@@ -180,6 +191,16 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.TokenAuthentication',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.environ.get('ANON_THROTTLE_RATE', '30/hour'),
+        'user': os.environ.get('USER_THROTTLE_RATE', '200/hour'),
+        'chat_burst': os.environ.get('CHAT_THROTTLE_RATE', '10/minute'),
+    },
+    'EXCEPTION_HANDLER': 'chatbotAPI.exception_handlers.custom_throttle_exception_handler',
 }
 
 AUTHENTICATION_BACKENDS = (

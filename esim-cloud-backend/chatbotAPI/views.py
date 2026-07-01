@@ -13,8 +13,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework import status
 
+from chatbotAPI.throttling import ChatBurstThrottle
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
+
 from chatbotAPI.serializers import ChatRequestSerializer
 from chatbotAPI.services.llm_client import complete_chat, LLMUnavailableError
+from chatbotAPI.services.context import sanitize_context
 
 try:
     from chatbotAPI.services.rag import retrieve
@@ -50,6 +54,7 @@ class ChatMessageView(APIView):
                       "conversation_id": "<uuid>" }
     """
     permission_classes = (AllowAny,)
+    throttle_classes = [ChatBurstThrottle, UserRateThrottle, AnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
         serializer = ChatRequestSerializer(data=request.data)
@@ -62,6 +67,9 @@ class ChatMessageView(APIView):
         message = data["message"]
         conversation_id = data.get("conversation_id") or uuid.uuid4()
         context = data.get("context")
+        if context:
+            context = sanitize_context(context)
+            logger.info(f"Chat context sanitized: {len(str(context))} chars, keys={list(context.keys())}")
 
         rag_sources = []
         if RAG_ENABLED:

@@ -72,3 +72,6 @@ m2r2
 chromadb-client
 graphlib-backport
 posthog==2.4.0
+
+# Redis cache backend for DRF throttling — Week 4 Day 1
+django-redis==4.12.1
