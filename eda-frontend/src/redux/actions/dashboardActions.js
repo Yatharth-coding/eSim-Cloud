@@ -149,7 +149,7 @@ export const togglePinSave = (saveId, version, branch, pinned) => (dispatch, get
       (res) => {
         if (res.status === 200) {
           console.log('[togglePinSave] success, pinned =', pinned)
-          dispatch(fetchSchematics())
+          return dispatch(fetchSchematics())
         }
       }
     )

@@ -21,15 +21,21 @@ class Base64ImageField(serializers.ImageField):
         return super(Base64ImageField, self).to_internal_value(data)
 
     def update(self, data):
+        if not data or data == 'null' or data == 'None' or data == '':
+            return None, None
         if isinstance(data, six.string_types):
             if 'data:' in data and ';base64,' in data:
                 header, data = data.split(';base64,')
+            else:
+                return None, None
         try:
             decoded_file = base64.b64decode(data)
-        except TypeError:
-            self.fail('invalid_image')
+        except Exception:
+            return None, None
         file_name = str(uuid.uuid4())
-        file_extension = imghdr.what(file_name, decoded_file)
+        file_extension = imghdr.what(None, decoded_file)
+        if not file_extension:
+            file_extension = 'png'
         complete_file_name = "%s.%s" % (file_name, file_extension,)
         data = ContentFile(decoded_file, name=complete_file_name)
         return complete_file_name, data

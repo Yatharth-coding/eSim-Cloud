@@ -98,6 +98,7 @@ export default function SimulationProperties (props) {
   const [err, setErr] = useState(false)
   const [error, setError] = useState(false)
   const [warning, setWarning] = useState(false)
+  const [historyWarning, setHistoryWarning] = React.useState(false)
   const [needParameters, setNeedParameters] = useState(false)
   const [status, setStatus] = useState('')
   const stats = { loading: 'loading', error: 'error', success: 'success' }
@@ -847,6 +848,9 @@ export default function SimulationProperties (props) {
       } catch (e) {
         console.error('[History] Failed to restore canvas XML:', e)
       }
+    } else {
+      // If this is an older history run before canvasXml was captured, notify the user.
+      setHistoryWarning(true)
     }
   }
 
@@ -873,6 +877,15 @@ export default function SimulationProperties (props) {
         >
           <Alert onClose={() => setWarning(false)} severity="warning">
             Circuit is not complete to be simulated!
+          </Alert>
+        </Snackbar>
+        <Snackbar
+          open={historyWarning}
+          autoHideDuration={6000}
+          onClose={() => setHistoryWarning(false)}
+        >
+          <Alert onClose={() => setHistoryWarning(false)} severity="warning">
+            This history entry was saved before circuit capturing was enabled and cannot be loaded into the canvas.
           </Alert>
         </Snackbar>
         <Snackbar

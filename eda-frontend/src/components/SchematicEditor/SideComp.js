@@ -88,6 +88,12 @@ export default function SideComp ({ favourite, setFavourite, component }) {
 
   // ── localStorage-backed add ──────────────────────────────────────────────
   const handleAddFavourite = () => {
+    const token = localStorage.getItem('esim_auth_token')
+    if (!token) {
+      window.open('#/login?close=close', '_blank')
+      return
+    }
+
     const updated = addFavourite(component)
     if (setFavourite) setFavourite(updated)
     showSnackbar('Added to favourites')
@@ -96,6 +102,12 @@ export default function SideComp ({ favourite, setFavourite, component }) {
 
   // ── localStorage-backed remove ───────────────────────────────────────────
   const handleRemoveFavourite = () => {
+    const token = localStorage.getItem('esim_auth_token')
+    if (!token) {
+      window.open('#/login?close=close', '_blank')
+      return
+    }
+
     const updated = removeFavourite(component.id)
     if (setFavourite) setFavourite(updated)
     showSnackbar('Removed from favourites')

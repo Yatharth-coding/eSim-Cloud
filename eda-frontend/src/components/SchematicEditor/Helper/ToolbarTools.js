@@ -587,9 +587,9 @@ export function parseXmlToGraph(xmlDoc, graph) {
   delete style[mxConstants.STYLE_STROKECOLOR] // transparent
   for (let i = 0; i < cells.length; i++) {
     const cellAttrs = cells[i].attributes
-    if (cellAttrs.Component.value === '1') { // is component
-      const vertexName = cellAttrs.value.value
-      const style = cellAttrs.style.value
+    if (cellAttrs.Component && cellAttrs.Component.value === '1') { // is component
+      const vertexName = cellAttrs.value ? cellAttrs.value.value : ''
+      const style = cellAttrs.style ? cellAttrs.style.value : ''
       const vertexId = Number(cellAttrs.id.value)
       const geom = cells[i].children[0].attributes
       const xPos = Number(geom.x.value)
@@ -601,13 +601,13 @@ export function parseXmlToGraph(xmlDoc, graph) {
       const height = Number(geom.height.value)
       const width = Number(geom.width.value)
       v1 = graph.insertVertex(parent, vertexId, vertexName, xPos, yPos, width, height, style)
-      v1.symbol = cellAttrs.symbol.value
+      v1.symbol = cellAttrs.symbol ? cellAttrs.symbol.value : ''
       if (v1.symbol === 'V') {
-        try { props = Object.assign({}, ComponentParameters[v1.symbol][cells[i].children[2].attributes.NAME.value]) } catch (e) { props = Object.assign({}, ComponentParameters[v1.symbol][cells[i].children[1].attributes.NAME.value]) }
+        try { props = Object.assign({}, ComponentParameters[v1.symbol][cells[i].children[2].attributes.NAME.value]) } catch (e) { try { props = Object.assign({}, ComponentParameters[v1.symbol][cells[i].children[1].attributes.NAME.value]) } catch(e) { props = Object.assign({}, ComponentParameters[v1.symbol]) } }
       } else {
         props = Object.assign({}, ComponentParameters[v1.symbol])
       }
-      try { props.NAME = cells[i].children[2].attributes.NAME.value } catch (e) { props.NAME = cells[i].children[1].attributes.NAME.value }
+      try { props.NAME = cells[i].children[2].attributes.NAME.value } catch (e) { try { props.NAME = cells[i].children[1].attributes.NAME.value } catch(e) { props.NAME = '' } }
       v1.properties = props
       v1.Component = true
       v1.CellType = 'Component'
@@ -616,9 +616,9 @@ export function parseXmlToGraph(xmlDoc, graph) {
       for (var check in props) {
         try { v1.properties[check] = cells[i].children[2].attributes[check].value } catch (e) { try { v1.properties[check] = cells[i].children[1].attributes[check].value } catch (e) { } }
       }
-    } else if (cellAttrs.Pin.value === '1') {
-      const vertexName = cellAttrs.value.value
-      const style = cellAttrs.style.value
+    } else if (cellAttrs.Pin && cellAttrs.Pin.value === '1') {
+      const vertexName = cellAttrs.value ? cellAttrs.value.value : ''
+      const style = cellAttrs.style ? cellAttrs.style.value : ''
       const vertexId = Number(cellAttrs.id.value)
       const geom = cells[i].children[0].attributes
       try { xPos = Number(geom.x.value) } catch (e) { xPos = 0 }
@@ -632,11 +632,11 @@ export function parseXmlToGraph(xmlDoc, graph) {
       var vp = graph.insertVertex(v1, vertexId, vertexName, xPos, yPos, 0.5, 0.5, style)
       vp.ParentComponent = v1
       vp.Pin = 1
-    } else if (cellAttrs.edge) { // is edge
+    } else if (cellAttrs.edge && cellAttrs.edge.value === '1') { // is edge
       const edgeId = Number(cellAttrs.id.value)
-      const source = Number(cellAttrs.sourceVertex.value)
-      const target = Number(cellAttrs.targetVertex.value)
-      var plist = cells[i].children[1].children
+      const source = cellAttrs.sourceVertex ? Number(cellAttrs.sourceVertex.value) : null
+      const target = cellAttrs.targetVertex ? Number(cellAttrs.targetVertex.value) : null
+      var plist = cells[i].children[1] && cells[i].children[1].children ? cells[i].children[1].children : []
       try {
         if (source && target) {
           var e = graph.insertEdge(parent, edgeId, null,
@@ -652,15 +652,19 @@ export function parseXmlToGraph(xmlDoc, graph) {
             var e = graph.addEdge(edge, parent, graph.getModel().getCell(source))
           if(!source)
             var e = graph.addEdge(edge, parent, graph.getModel().getCell(target))
-          e.geometry.targetPoint = new mxPoint(Number(cellAttrs.tarx.value), Number(cellAttrs.tary.value))
+          if (e && e.geometry) {
+            e.geometry.targetPoint = new mxPoint(Number(cellAttrs.tarx ? cellAttrs.tarx.value : 0), Number(cellAttrs.tary ? cellAttrs.tary.value : 0))
+          }
         }
-        console.log("VERTEX", e)
-
-        e.geometry.points = []
-        for (var a in cells[i].children[1].children) {
+        if (e && e.geometry) {
+          e.geometry.points = []
+        }
+        for (var a in plist) {
           try {
-            e.geometry.points.push(new mxPoint(Number(plist[a].attributes.x.value), Number(plist[a].attributes.y.value)))
-          } catch (e) { }
+            if (e && e.geometry) {
+              e.geometry.points.push(new mxPoint(Number(plist[a].attributes.x.value), Number(plist[a].attributes.y.value)))
+            }
+          } catch (err) { }
             graph.getModel().beginUpdate()
           try {
             graph.view.refresh()
@@ -672,8 +676,8 @@ export function parseXmlToGraph(xmlDoc, graph) {
             morph.startAnimation()
           }
         }
-        if (graph.getModel().getCell(target).edge === true) {
-          e.geometry.setTerminalPoint(new mxPoint(Number(cellAttrs.tarx.value), Number(cellAttrs.tary.value)), false)
+        if (target && graph.getModel().getCell(target) && graph.getModel().getCell(target).edge === true) {
+          e.geometry.setTerminalPoint(new mxPoint(Number(cellAttrs.tarx ? cellAttrs.tarx.value : 0), Number(cellAttrs.tary ? cellAttrs.tary.value : 0)), false)
           graph.getModel().beginUpdate()
           try {
             graph.view.refresh()
