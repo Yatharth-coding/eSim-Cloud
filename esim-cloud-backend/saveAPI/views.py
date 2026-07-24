@@ -56,6 +56,7 @@ class StateSaveView(APIView):
                 branch=request.data.get("branch"),
                 version=request.data.get("version"))
             serializer = StateSaveSerializer(data=request.data)
+            logger.info("Base64 string starts with: %s", str(request.data.get("base64_image"))[:100])
             if serializer.is_valid():
                 img = Base64ImageField(max_length=None, use_url=True)
                 filename, content = img.update(request.data['base64_image'])
@@ -86,6 +87,7 @@ class StateSaveView(APIView):
                 return Response(serializer.errors,
                                 status=status.HTTP_400_BAD_REQUEST)
             except StateSave.DoesNotExist:
+                logger.info("Base64 string starts with (CREATE): %s", str(request.data.get("base64_image"))[:100])
                 img = Base64ImageField(max_length=None, use_url=True)
                 filename, content = img.update(request.data['base64_image'])
                 # Check if any existing version of this save_id is pinned
@@ -375,25 +377,31 @@ class UserSavesView(APIView):
 
     @swagger_auto_schema(responses={200: StateSaveSerializer})
     def get(self, request):
-        # Step 1: deduplicate by save_id (PostgreSQL DISTINCT ON requires
-        # save_id to be the leading ORDER BY column for the distinct clause).
-        # Pick the most recent row per save_id first.
-        deduplicated_ids = StateSave.objects.filter(
-            owner=self.request.user, is_arduino=False).order_by(
-            "save_id", "-save_time").distinct("save_id").values_list(
-            'id', flat=True)
-        # Step 2: re-fetch those rows and apply the dashboard sort:
-        # pinned=True first, then most-recently-saved.
-        saved_state = StateSave.objects.filter(
-            id__in=deduplicated_ids).order_by("-pinned", "-save_time")
-        # Uncomment this if submissions are not required at the dashboard
-        # submissions = Submission.objects.filter(student=self.request.user)
-        # for submission in submissions:
-        #     saved_state = saved_state.exclude(save_id=submission.schematic.save_id)  # noqa
+        # Fetch all saves for this user (non-arduino), ordered by save_time desc.
+        # We deduplicate by save_id in Python so this works on both SQLite and
+        # PostgreSQL. (The original .distinct("save_id") is PostgreSQL-only and
+        # throws NotImplementedError on SQLite, causing a 500 response.)
+        all_saves = StateSave.objects.filter(
+            owner=self.request.user, is_arduino=False
+        ).order_by('-save_time')
+
+        # Keep only the most-recent row per save_id (dict preserves insertion order)
+        seen = {}
+        for obj in all_saves:
+            key = str(obj.save_id)
+            if key not in seen:
+                seen[key] = obj
+
+        # Sort: pinned first, then most-recently saved
+        deduped = sorted(seen.values(), key=lambda o: (not o.pinned, -o.save_time.timestamp()))
+
         try:
-            serialized = StateSaveSerializer(saved_state, many=True, context={'request': request})
+            serialized = SaveListSerializer(deduped, many=True, context={'request': request})
             return Response(serialized.data)
-        except Exception:
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("UserSavesView error: %s", str(e))
             return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
