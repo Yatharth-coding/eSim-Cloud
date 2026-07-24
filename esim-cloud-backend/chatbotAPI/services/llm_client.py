@@ -53,6 +53,37 @@ def complete_chat(system_prompt, user_message, context_json=None):
             
         return data["message"]["content"]
         
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
-        logger.error("[chatbotAPI] Connection or Timeout error with Ollama (%s): %s", type(exc).__name__, str(exc))
-        raise LLMUnavailableError("Failed to connect to Ollama.")
+    except Exception as ollama_exc:
+        logger.warning("[chatbotAPI] Ollama failed (%s): %s. Triggering Gemini fallback.", type(ollama_exc).__name__, str(ollama_exc))
+        
+        gemini_api_key = settings.GEMINI_API_KEY
+        if not gemini_api_key:
+            logger.error("[chatbotAPI] Gemini API key not found in settings. Cannot fallback.")
+            raise LLMUnavailableError("Both Ollama and Gemini are unavailable (missing API key).")
+            
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
+        gemini_payload = {
+            "system_instruction": {
+                "parts": {"text": system_prompt + security_instructions}
+            },
+            "contents": [{
+                "parts": [{"text": content}]
+            }]
+        }
+        
+        try:
+            gemini_response = requests.post(gemini_url, json=gemini_payload, timeout=60)
+            if gemini_response.status_code != 200:
+                logger.error("[chatbotAPI] Gemini returned HTTP %d: %s", gemini_response.status_code, gemini_response.text)
+                raise LLMUnavailableError("Gemini returned a non-200 status.")
+                
+            gemini_data = gemini_response.json()
+            candidates = gemini_data.get("candidates", [])
+            if not candidates or "content" not in candidates[0] or "parts" not in candidates[0]["content"]:
+                raise LLMUnavailableError("Malformed response from Gemini.")
+                
+            return candidates[0]["content"]["parts"][0]["text"]
+            
+        except Exception as gemini_exc:
+            logger.error("[chatbotAPI] Gemini fallback also failed (%s): %s", type(gemini_exc).__name__, str(gemini_exc))
+            raise LLMUnavailableError("Failed to connect to both Ollama and Gemini.")

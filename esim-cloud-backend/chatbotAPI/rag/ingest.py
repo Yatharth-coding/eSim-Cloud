@@ -20,6 +20,18 @@ EMBED_MODEL = 'nomic-embed-text'
 # Maximum retries for embedding requests
 MAX_RETRIES = 3
 
+def _build_docs_url(stem):
+    parts = stem.split('_', 1)
+    if len(parts) == 2:
+        folder, page = parts[0], parts[1]
+        if folder == 'eSim' and page.startswith('on_Cloud'):
+            folder = 'eSim_on_Cloud'
+            page = page[len('on_Cloud_'):]
+        if page == 'index':
+            return f"https://esim-cloud.readthedocs.io/en/latest/{folder}/"
+        return f"https://esim-cloud.readthedocs.io/en/latest/{folder}/{page}.html"
+    return "https://esim-cloud.readthedocs.io/"
+
 def get_chroma_client():
     """Returns a chromadb.HttpClient connecting to the remote chromadb service."""
     print(f"ChromaDB data directory: {os.path.abspath(CHROMA_DATA_DIR)}")
@@ -105,7 +117,7 @@ def ingest_from_file(filepath, collection, verbose=False):
     # Extract a title from the first # heading found (or uses the filename if no heading)
     title_match = re.search(r'^#\s+(.+)$', content, flags=re.MULTILINE)
     source_title = title_match.group(1).strip() if title_match else pathlib.Path(filepath).name
-    source_url = str(filepath)
+    source_url = _build_docs_url(pathlib.Path(filepath).stem)
 
     chunks = chunk_text(content, source_title, source_url)
     

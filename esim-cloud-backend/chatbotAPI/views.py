@@ -40,6 +40,7 @@ class HealthCheckView(APIView):
     Uses AllowAny so it works without authentication.
     """
     permission_classes = (AllowAny,)
+    authentication_classes = ()
 
     def get(self, request, *args, **kwargs):
         return Response({"status": "ok"}, status=200)
@@ -54,6 +55,7 @@ class ChatMessageView(APIView):
                       "conversation_id": "<uuid>" }
     """
     permission_classes = (AllowAny,)
+    authentication_classes = ()
     throttle_classes = [ChatBurstThrottle, UserRateThrottle, AnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
