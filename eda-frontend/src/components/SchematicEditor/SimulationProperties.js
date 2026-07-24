@@ -503,81 +503,52 @@ export default function SimulationProperties (props) {
 
   // Get the simulation result with task_Id
   function simulationResult (url) {
-    let isError = false
     let msg
-    let resPending = true // to stop immature opening of simulation screen
     api
       .get(url)
       .then((res) => {
         if (res.data.state === 'PROGRESS' || res.data.state === 'PENDING') {
           handleStatus(stats.loading)
-          setTimeout(simulationResult(url), 1000)
+          setTimeout(() => simulationResult(url), 1000)
+          return { type: 'PROGRESS' }
         } else if (Object.prototype.hasOwnProperty.call(res.data.details, 'fail')) {
-          resPending = false
-          setIsResult(false)
           console.log('failed notif')
           console.log(res.data.details)
           msg = res.data.details.fail.replace("b'", '')
-          isError = true
-          // Provide the full details object to errorDetails state
+
+          // eslint-disable-next-line camelcase
           const errorHelp = res.data?.details?.error_help
-          dispatch(setLastSimulationError(errorHelp?.summary || "Simulation failed"))
+          dispatch(setLastSimulationError(errorHelp?.summary || 'Simulation failed'))
           setErrorDetails(res.data.details)
-          // Bug 3 Part A: capture canvas XML at the moment of simulation failure.
-          let canvasXmlOnFail = null
-          try { canvasXmlOnFail = Save() } catch (e) { console.warn('[History] Could not capture canvas XML:', e) }
-          // Task 2: save failed run to localStorage history (no auth required).
-          saveSimulationRun({
-            timestamp: new Date().toISOString(),
-            success: false,
-            simulationType: typeSimulation,
-            result: res.data?.details,
-            errorHelp: res.data?.details?.error_help || null,
-            netlist: netfile.netlist || '',
-            canvasXml: canvasXmlOnFail
-          })
+
+          return { type: 'FAIL', details: res.data.details, errorHelp: errorHelp }
         } else {
           const result = res.data.details
-          resPending = false
           if (result === null) {
-            setIsResult(false)
+            console.log('[DEBUG] result is null in first .then!')
+            return { type: 'NULL_RESULT' }
           } else {
+            console.log('[DEBUG] Setting successResultData =', res.data.details)
             const temp = res.data.details.data
             const data = result.data
-            // console.log('DATA SIm', data)
+
             if (res.data.details.graph === 'true') {
               const simResultGraph = { labels: [], x_points: [], y_points: [] }
-              // populate the labels
               for (let i = 0; i < data.length; i++) {
                 simResultGraph.labels[0] = data[i].labels[0]
                 const lab = data[i].labels
-                // lab is an array containeing labels names ['time','abc','def']
                 simResultGraph.x_points = data[0].x
-
-                // labels
                 for (let x = 1; x < lab.length; x++) {
-                  //   if (lab[x].includes('#branch')) {
-                  //     lab[x] = `I (${lab[x].replace('#branch', '')})`
-                  //   }
-                  //  uncomment below if you want label like V(r1.1) but it will break the graph showing time as well
-                  //  else {
-                  // lab[x] = `V (${lab[x]})`
-
-                  // }
                   simResultGraph.labels.push(lab[x])
                 }
-                // populate y_points
                 for (let z = 0; z < data[i].y.length; z++) {
                   simResultGraph.y_points.push(data[i].y[z])
                 }
               }
-
               simResultGraph.x_points = simResultGraph.x_points.map(d => parseFloat(d))
-
               for (let i1 = 0; i1 < simResultGraph.y_points.length; i1++) {
                 simResultGraph.y_points[i1] = simResultGraph.y_points[i1].map(d => parseFloat(d))
               }
-
               dispatch(setResultGraph(simResultGraph))
             } else {
               const simResultText = []
@@ -593,43 +564,60 @@ export default function SimulationProperties (props) {
                   temp[i][0] = `V(${temp[i][0]})`
                   postfixUnit = 'V'
                 }
-
                 simResultText.push(temp[i][0] + ' ' + temp[i][1] + ' ' + parseFloat(temp[i][2]) + ' ' + postfixUnit + '\n')
               }
-
               handleSimulationResult(res.data.details)
               dispatch(setResultText(simResultText))
             }
-            setIsResult(true)
-            props.setLtiSimResult(true)
+            return { type: 'SUCCESS', details: res.data.details }
           }
         }
       })
-      .then((res) => {
-        if (isError === false && resPending === false) {
+      .then((chainData) => {
+        if (!chainData) return
+
+        if (chainData.type === 'SUCCESS') {
           console.log('no error')
           handleStatus(stats.success)
           handlesimulateOpen()
-          // Clear any previous error help on success.
           setErrorDetails(null)
-          // Bug 3 Part A: capture canvas XML at the moment of successful simulation.
+
           let canvasXmlOnSuccess = null
           try { canvasXmlOnSuccess = Save() } catch (e) { console.warn('[History] Could not capture canvas XML:', e) }
-          // Task 2: save successful run to localStorage history.
+
+          console.log('[DEBUG] Calling saveSimulationRun! successResultData =', chainData.details)
           saveSimulationRun({
             timestamp: new Date().toISOString(),
             success: true,
             simulationType: typeSimulation,
-            result: null,
+            result: chainData.details,
             errorHelp: null,
             netlist: netfile.netlist || '',
             canvasXml: canvasXmlOnSuccess
           })
-        } else if (resPending === false) {
+          setIsResult(true)
+          props.setLtiSimResult(true)
+        } else if (chainData.type === 'FAIL') {
+          setIsResult(false)
+          let canvasXmlOnFail = null
+          try { canvasXmlOnFail = Save() } catch (e) { console.warn('[History] Could not capture canvas XML:', e) }
+
+          saveSimulationRun({
+            timestamp: new Date().toISOString(),
+            success: false,
+            simulationType: typeSimulation,
+            result: chainData.details,
+            errorHelp: chainData.errorHelp || null,
+            netlist: netfile.netlist || '',
+            canvasXml: canvasXmlOnFail
+          })
+
           handleStatus(stats.error)
-          handleErrMsg("Simulation failed. See technical details above.")
+          handleErrMsg('Simulation failed. See technical details above.')
+          handleErrOpen()
+        } else if (chainData.type === 'NULL_RESULT') {
+          setIsResult(false)
         }
-        handleErrOpen()
       })
       .catch(function (error) {
         console.log(error)
@@ -790,6 +778,7 @@ export default function SimulationProperties (props) {
         controlLine + '\n' +
         controlBlock + '\n'
 
+      setAutoRunFired(true)
       dispatch(setNetlist(netlist))
       prepareNetlist(netlist)
     }
@@ -904,7 +893,7 @@ export default function SimulationProperties (props) {
             errorDetails={errorDetails}
             onAskAI={() => {
               const errorHelp = errorDetails.error_help
-              const summary = errorHelp ? errorHelp.summary : "Simulation failed"
+              const summary = errorHelp ? errorHelp.summary : 'Simulation failed'
               const hints = errorHelp && errorHelp.hints ? errorHelp.hints : []
               const message =
                 'I got this simulation error: ' +
@@ -926,7 +915,7 @@ export default function SimulationProperties (props) {
             errorDetails={historyErrorDetails}
             onAskAI={() => {
               const errorHelp = historyErrorDetails.error_help
-              const summary = errorHelp ? errorHelp.summary : "Simulation failed"
+              const summary = errorHelp ? errorHelp.summary : 'Simulation failed'
               const hints = errorHelp && errorHelp.hints ? errorHelp.hints : []
               const message =
                 'I got this simulation error: ' +
@@ -953,11 +942,10 @@ export default function SimulationProperties (props) {
             History
           </Button>
         </div>
-        <SimulationHistoryDrawer
-          open={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          onSelectResult={handleSelectHistoryResult}
-        />
+        {/* SimulationHistoryDrawer is mounted once at the bottom of this component
+            (near line 1803) with full saveId/version/branch props.
+            Do NOT add a second instance here — it would cause each history entry
+            to appear twice in the drawer. */}
         {/* Bug 2 fix: show "success, waveform not available" message for green entries */}
         {historySuccessMsg && (
           <div style={{
@@ -977,7 +965,7 @@ export default function SimulationProperties (props) {
           {/* DC Solver */}
           <ListItem className={classes.simulationOptions} divider>
             <div className={classes.propertiesBox}>
-              <ExpansionPanel onClick={onTabExpand}>
+              <ExpansionPanel onClick={onTabExpand} style={{ width: '100%' }}>
                 <ExpansionPanelSummary
                   expandIcon={<ExpandMoreIcon />}
                   aria-controls="panel1a-content"
@@ -1037,12 +1025,12 @@ export default function SimulationProperties (props) {
 
           {/* DC Sweep */}
           <ListItem className={classes.simulationOptions} divider>
-            <ExpansionPanel onClick={onTabExpand}>
+            <ExpansionPanel onClick={onTabExpand} style={{ width: '100%' }}>
               <ExpansionPanelSummary
                 expandIcon={<ExpandMoreIcon />}
                 aria-controls="panel1a-content"
                 id="panel1a-header"
-                style={{ width: '97%' }}
+                style={{ width: '100%' }}
               >
                 <Typography className={classes.heading}>DC Sweep</Typography>
               </ExpansionPanelSummary>
@@ -1234,12 +1222,12 @@ export default function SimulationProperties (props) {
 
           {/* Transient Analysis */}
           <ListItem className={classes.simulationOptions} divider>
-            <ExpansionPanel onClick={onTabExpand}>
+            <ExpansionPanel onClick={onTabExpand} style={{ width: '100%' }}>
               <ExpansionPanelSummary
                 expandIcon={<ExpandMoreIcon />}
                 aria-controls="panel1a-content"
                 id="panel1a-header"
-                style={{ width: '97%' }}
+                style={{ width: '100%' }}
               >
                 <Typography className={classes.heading}>Transient Analysis</Typography>
               </ExpansionPanelSummary>
@@ -1365,7 +1353,7 @@ export default function SimulationProperties (props) {
 
           {/* AC Analysis */}
           <ListItem className={classes.simulationOptions} divider>
-            <ExpansionPanel onClick={onTabExpand}>
+            <ExpansionPanel onClick={onTabExpand} style={{ width: '100%' }}>
               <ExpansionPanelSummary
                 expandIcon={<ExpandMoreIcon />}
                 aria-controls="panel1a-content"
@@ -1477,12 +1465,12 @@ export default function SimulationProperties (props) {
 
           {/* Transfer Function Analysis */}
           <ListItem className={classes.simulationOptions} divider>
-            <ExpansionPanel onClick={onTabExpand}>
+            <ExpansionPanel onClick={onTabExpand} style={{ width: '100%' }}>
               <ExpansionPanelSummary
                 expandIcon={<ExpandMoreIcon />}
                 aria-controls="panel1a-content"
                 id="panel1a-header"
-                style={{ width: '97%' }}
+                style={{ width: '100%' }}
               >
                 <Typography className={classes.heading}>Transfer Function Analysis</Typography>
               </ExpansionPanelSummary>
@@ -1630,12 +1618,12 @@ export default function SimulationProperties (props) {
           </ListItem>
           {/* Noise Analysis */}
           <ListItem className={classes.simulationOptions} divider>
-            <ExpansionPanel onClick={onTabExpand}>
+            <ExpansionPanel onClick={onTabExpand} style={{ width: '100%' }}>
               <ExpansionPanelSummary
                 expandIcon={<ExpandMoreIcon />}
                 aria-controls="panel1a-content"
                 id="panel1a-header"
-                style={{ width: '97%' }}
+                style={{ width: '100%' }}
               >
                 <Typography className={classes.heading}>Noise Analysis</Typography>
               </ExpansionPanelSummary>

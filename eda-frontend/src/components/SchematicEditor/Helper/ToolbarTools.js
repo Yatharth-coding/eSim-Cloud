@@ -9,6 +9,7 @@ import * as actions from '../../../redux/actions/actions'
 import ComponentParameters from './ComponentParametersData'
 import { findNearestWire, findNearestVSourcePin } from './SideBar'
 import { checkNetlistErc, buildNetlistFromGraph, annotate } from './NetlistExporter'
+import { getEditorGraph } from './ComponentDrag'
 var graph
 var undoManager
 
@@ -394,29 +395,31 @@ export function ErcCheck() {
   }
 
   if (vertexCount === 0) {
-    alert('No Component added')
-    ++errorCount
+    return 'No Component added'
   } else if (PinNC !== 0) {
-    alert('Pins not connected')
+    return 'Pins not connected'
   } else if (ground === 0) {
-    alert('Ground not connected')
+    return 'Ground not connected'
   } else {
     if (errorCount === 0) {
-      alert('ERC Check completed')
+      return 'ERC Check completed'
     }
   }
 }
 // ERC Check for Netlist, It also returns a boolean value which is called in the Netlist Generator 
-export function ErcCheckNets() {
+export function ErcCheckNets(showSnack = null) {
   const result = checkNetlistErc(graph)
   if (result.vertexCount === 0) {
-    alert('No Component added')
+    if (showSnack) showSnack('No Component added', 'error')
     return false
   } else if (result.pinNC !== 0) {
-    alert('Pins not connected')
+    if (showSnack) showSnack('Pins not connected', 'error')
     return false
   } else if (result.ground === 0) {
-    alert('Ground not connected')
+    if (showSnack) showSnack('Ground not connected', 'error')
+    return false
+  } else if (result.hasSource === false) {
+    if (showSnack) showSnack('No voltage or current source found. Add a source (e.g. VDC, VAC, IDC) to drive the circuit.', 'error')
     return false
   } else {
     if (result.errorCount === 0) {
@@ -463,10 +466,10 @@ export function GetProbeNodes () {
 }
 
 // Function to generate Netlist
-export function GenerateNetList() {
-  var erc = ErcCheckNets() // Checking for ERC Failures
+export function GenerateNetList(showSnack = null) {
+  var erc = ErcCheckNets(showSnack) // Checking for ERC Failures
   if (erc === false) {
-    alert('ERC check failed')
+    if (showSnack) showSnack('ERC check failed', 'error')
   } else {
     const netobj = buildNetlistFromGraph(graph)
     store.dispatch({
@@ -697,17 +700,23 @@ export function parseXmlToGraph(xmlDoc, graph) {
   console.log("finish loading")
 }
 
+
 export function renderGalleryXML(xml) {
-  graph.removeCells(graph.getChildVertices(graph.getDefaultParent()))
-  graph.view.refresh()
+  var activeGraph = graph || getEditorGraph();
+  if (!activeGraph) {
+    console.error("renderGalleryXML: graph is undefined!");
+    return;
+  }
+  activeGraph.removeCells(activeGraph.getChildVertices(activeGraph.getDefaultParent()))
+  activeGraph.view.refresh()
   var xmlDoc = mxUtils.parseXml(xml)
-  parseXmlToGraph(xmlDoc, graph)
+  parseXmlToGraph(xmlDoc, activeGraph)
 }
 // Certain Variables need to be Defined before Saving the Circuit, XML Wire Connections does that 
 function XMLWireConnections() {
   var erc = true
   if (erc === false) {
-    alert('ERC check failed')
+    // dead code
   } else {
     var list = graph.getModel().cells
     for (var property in list) {

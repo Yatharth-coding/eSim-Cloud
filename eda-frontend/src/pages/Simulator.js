@@ -155,79 +155,45 @@ export default function Simulator () {
   const [isResult, setIsResult] = useState(false)
 
   function simulationResult (url) {
-    let isError = false
     let msg
-    let resPending = true // to stop immature opening of simulation screen
     api
       .get(url)
       .then((res) => {
         if (res.data.state === 'PROGRESS' || res.data.state === 'PENDING') {
           handleStatus(stats.loading)
-          setTimeout(simulationResult(url), 1000)
+          setTimeout(() => simulationResult(url), 1000)
+          return { type: 'PROGRESS' }
         } else if (Object.prototype.hasOwnProperty.call(res.data.details, 'fail')) {
-          resPending = false
-          setIsResult(false)
           console.log('failed notif')
           console.log(res.data.details)
           msg = res.data.details.fail.replace("b'", '')
-          isError = true
-          // BUG 3 fix: use optional chaining (?.) at every level so an old
-          // backend response without error_help does not throw a TypeError.
-          // Confirmed path (from views.py CeleryResultView):
-          //   res.data = { state: '...', details: celery_result.info }
-          //   celery_result.info on failure = { fail: '...', error_help: {...} }
-          // → correct path is res.data?.details?.error_help
-          // Provide the full details object to errorDetails state
+          
           const errorHelp = res.data?.details?.error_help
           dispatch(setLastSimulationError(errorHelp?.summary || "Simulation failed"))
           setErrorDetails(res.data.details)
-          // Task 5: save failed run to localStorage history.
-          saveSimulationRun({
-            timestamp: new Date().toISOString(),
-            success: false,
-            simulationType: 'NgSpiceSimulator',
-            result: res.data.details,
-            errorHelp: res.data?.details?.error_help || null,
-            netlist: netlistCode
-          })
+          
+          return { type: 'FAIL', details: res.data.details, errorHelp: errorHelp }
         } else {
           const result = res.data.details
-          resPending = false
           if (result === null) {
-            setIsResult(false)
+            return { type: 'NULL_RESULT' }
           } else {
             const temp = res.data.details.data
-
             const data = result.data
             if (res.data.details.graph === 'true') {
               const simResultGraph = { labels: [], x_points: [], y_points: [] }
-              // populate the labels
               for (let i = 0; i < data.length; i++) {
                 simResultGraph.labels[0] = data[i].labels[0]
                 const lab = data[i].labels
-                // lab is an array containeing labels names ['time','abc','def']
                 simResultGraph.x_points = data[0].x
-
-                // labels
                 for (let x = 1; x < lab.length; x++) {
-                //   if (lab[x].includes('#branch')) {
-                //     lab[x] = `I (${lab[x].replace('#branch', '')})`
-                //   }
-                  //  uncomment below if you want label like V(r1.1) but it will break the graph showing time as well
-                  //  else {
-                  // lab[x] = `V (${lab[x]})`
-
-                  // }
                   simResultGraph.labels.push(lab[x])
                 }
-                // populate y_points
                 for (let z = 0; z < data[i].y.length; z++) {
                   simResultGraph.y_points.push(data[i].y[z])
                 }
               }
-
               simResultGraph.x_points = simResultGraph.x_points.map(d => parseFloat(d))
-
               for (let i1 = 0; i1 < simResultGraph.y_points.length; i1++) {
                 simResultGraph.y_points[i1] = simResultGraph.y_points[i1].map(d => parseFloat(d))
               }
@@ -246,41 +212,49 @@ export default function Simulator () {
                   temp[i][0] = `V(${temp[i][0]})`
                   postfixUnit = 'V'
                 }
-
                 simResultText.push(temp[i][0] + ' ' + temp[i][1] + ' ' + parseFloat(temp[i][2]) + ' ' + postfixUnit + '\n')
               }
-              // handleSimulationResult(res.data.details)
               dispatch(setResultText(simResultText))
             }
-            setIsResult(true)
+            return { type: 'SUCCESS', details: res.data.details }
           }
         }
       })
-      .then((res) => {
-        if (isError === false && resPending === false) {
-          // console.log('no error')
+      .then((chainData) => {
+        if (!chainData) return
+        
+        if (chainData.type === 'SUCCESS') {
           handleStatus(stats.success)
           handlesimulateOpen()
-          // Clear any previous error help on success.
           setErrorDetails(null)
-          // Task 5: save successful run to localStorage history.
+          
           saveSimulationRun({
             timestamp: new Date().toISOString(),
             success: true,
             simulationType: 'NgSpiceSimulator',
-            result: null,
+            result: chainData.details,
             errorHelp: null,
             netlist: netlistCode
           })
-        } else if (resPending === false) {
+          setIsResult(true)
+        } else if (chainData.type === 'FAIL') {
+          setIsResult(false)
+          
+          saveSimulationRun({
+            timestamp: new Date().toISOString(),
+            success: false,
+            simulationType: 'NgSpiceSimulator',
+            result: chainData.details,
+            errorHelp: chainData.errorHelp || null,
+            netlist: netlistCode
+          })
+          
           handleStatus(stats.error)
           handleErrMsg("Simulation failed. See technical details above.")
-
-          // console.log('reached error alert')
-          // console.log(msg)
-          // alert(msg)
+          handleErrOpen()
+        } else if (chainData.type === 'NULL_RESULT') {
+          setIsResult(false)
         }
-        handleErrOpen()
       })
       .catch(function (error) {
         console.log(error)
