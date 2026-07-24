@@ -24,17 +24,17 @@ const useStyles = makeStyles((theme) => ({
     whiteSpace: 'pre-wrap',
   },
   userBubble: {
-    backgroundColor: theme.palette.primary.main,
-    color: '#fff',
+    backgroundColor: theme.palette.primary.light,
+    color: theme.palette.primary.contrastText,
   },
   assistantBubble: {
-    backgroundColor: '#555',
-    color: '#fff',
+    backgroundColor: theme.palette.grey[100],
+    color: theme.palette.text.primary,
   },
   sourcesAccordion: {
     marginTop: theme.spacing(1),
-    backgroundColor: '#444',
-    color: '#ddd',
+    backgroundColor: theme.palette.grey[50],
+    color: theme.palette.text.secondary,
   },
   sourcesSummary: {
     minHeight: 36,
@@ -52,7 +52,7 @@ const useStyles = makeStyles((theme) => ({
     padding: theme.spacing(0.5, 1),
   },
   sourceLink: {
-    color: '#90caf9',
+    color: theme.palette.primary.main,
     wordBreak: 'break-word',
   },
   sourceText: {
@@ -79,14 +79,14 @@ export default function ChatMessage({ message, isUser, sources }) {
               <List disablePadding>
                 {(sources || []).map((source, idx) => (
                   <ListItem key={idx} className={classes.sourceItem} disableGutters>
-                    {source.url ? (
+                    {source.url && (source.url.startsWith('http://') || source.url.startsWith('https://')) ? (
                       <Link href={source.url} target="_blank" rel="noopener noreferrer" className={classes.sourceLink} variant="caption">
                         {source.title}
                       </Link>
                     ) : (
                       <span className={classes.sourceText}>
                         <Typography variant="caption" style={{ color: '#ddd' }}>
-                          {source.title}
+                          {source.title || 'eSim Documentation'}
                         </Typography>
                       </span>
                     )}

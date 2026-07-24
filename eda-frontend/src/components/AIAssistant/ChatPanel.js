@@ -22,6 +22,8 @@ import { getEditorGraph } from '../SchematicEditor/Helper/ComponentDrag';
 import { buildEditorContext } from './contextBuilder';
 import { useSelector } from 'react-redux';
 import { buildNetlistFromGraph } from '../SchematicEditor/Helper/NetlistExporter';
+import ChatBubbleOutlineIcon from '@material-ui/icons/ChatBubbleOutline';
+import EmptyState from '../Shared/EmptyState';
 
 const drawerWidth = 360;
 
@@ -37,8 +39,8 @@ const useStyles = makeStyles((theme) => ({
     [theme.breakpoints.up('sm')]: {
       width: drawerWidth,
     },
-    backgroundColor: '#404040',
-    color: '#fff',
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
     display: 'flex',
     flexDirection: 'column',
     zIndex: 1250, // Chosen to float above the mxGraph canvas/toolbar (<1000) but not permanently block RightSidebar layout.
@@ -48,7 +50,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: theme.spacing(2),
-    borderBottom: '1px solid #555',
+    borderBottom: `1px solid ${theme.palette.divider}`,
   },
   messagesContainer: {
     flex: 1,
@@ -58,7 +60,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'column',
   },
   closeButton: {
-    color: '#fff',
+    color: theme.palette.text.secondary,
   },
 }));
 
@@ -167,9 +169,12 @@ export default function ChatPanel() {
         
         <div className={classes.messagesContainer}>
           {messages.length === 0 && (
-            <Typography variant="body2" style={{ color: '#aaa', textAlign: 'center', marginTop: 20 }}>
-              Ask about components, simulation, or eSim usage.
-            </Typography>
+            <EmptyState
+              icon={<ChatBubbleOutlineIcon />}
+              title="How can I help you?"
+              description="Ask about components, simulation, or eSim usage."
+              minHeight="200px"
+            />
           )}
           {messages.map((msg) => (
             <ChatMessage 

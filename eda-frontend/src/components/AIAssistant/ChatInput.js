@@ -7,18 +7,18 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     alignItems: 'center',
     padding: theme.spacing(1),
-    backgroundColor: '#2d2d2d',
-    borderTop: '1px solid #555',
+    backgroundColor: theme.palette.background.paper,
+    borderTop: `1px solid ${theme.palette.divider}`,
   },
   textField: {
     flex: 1,
-    backgroundColor: '#404040',
+    backgroundColor: theme.palette.background.default,
     borderRadius: 4,
     '& .MuiInputBase-root': {
-      color: '#fff',
+      color: theme.palette.text.primary,
     },
     '& .MuiOutlinedInput-notchedOutline': {
-      border: 'none',
+      border: `1px solid ${theme.palette.divider}`,
     },
   },
   sendButton: {
