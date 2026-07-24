@@ -342,27 +342,27 @@ export default function SchematicsList ({ ltiDetails = null }) {
               </Grid>
             )}
 
-        {/* ── Loading state ─────────────────────────────────────────────────── */}
-        {isLoading
-          ? (
-          <Grid item xs={12}>
-            <Box className={classes.centeredSpinner}>
-              <CircularProgress />
-            </Box>
-          </Grid>
-            )
-          : (
-          <>
-            {/* ── PINNED section ─────────────────────────────────────────────── */}
-            <Grid item xs={12}>
-              <div className={classes.sectionHeader}>
-                <Typography className={classes.sectionTitle} variant='h6'>
+            {/* ── Loading state ─────────────────────────────────────────────────── */}
+            {isLoading
+              ? (
+                <Grid item xs={12}>
+                  <Box className={classes.centeredSpinner}>
+                    <CircularProgress />
+                  </Box>
+                </Grid>
+              )
+              : (
+                <>
+                  {/* ── PINNED section ─────────────────────────────────────────────── */}
+                  <Grid item xs={12}>
+                    <div className={classes.sectionHeader}>
+                      <Typography className={classes.sectionTitle} variant='h6'>
                   ★ Pinned
-                </Typography>
-                <Typography variant='body2' color='textSecondary'>
+                      </Typography>
+                      <Typography variant='body2' color='textSecondary'>
                   ({pinnedCircuits.length})
-                </Typography>
-              </div>
+                      </Typography>
+                    </div>
 
               {pinnedCircuits.length === 0
                 ? (
@@ -393,11 +393,11 @@ export default function SchematicsList ({ ltiDetails = null }) {
               <div className={classes.sectionHeader}>
                 <Typography className={classes.sectionTitle} variant='h6'>
                   🕒 Recent
-                </Typography>
-                <Typography variant='body2' color='textSecondary'>
+                      </Typography>
+                      <Typography variant='body2' color='textSecondary'>
                   ({recentCircuits.length} total)
-                </Typography>
-              </div>
+                      </Typography>
+                    </div>
 
               {recentCircuits.length === 0
                 ? (
